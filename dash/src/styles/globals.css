@@ -37,3 +37,19 @@
 		opacity: 0;
 	}
 }
+:root {
+  --fc-gold: #c9a95d;
+  --fc-black: #0a0a0a;
+}
+
+.fc-bg {
+  background-color: var(--fc-black);
+}
+
+.fc-gold {
+  color: var(--fc-gold);
+}
+
+.fc-border {
+  border-color: var(--fc-gold);
+}

@@ -1,4 +1,4 @@
-import { Driver, TimingData } from "@/types/state.type";
+import type { Driver, TimingData } from "@/types/state.type";
 
 import { calculatePosition } from "@/lib/calculatePosition";
 
@@ -23,7 +23,7 @@ export default function DriverViolations({ driver, driverViolations, driversTimi
 				{driverViolations > 4 && driversTiming && (
 					<p>
 						{calculatePosition(Math.round(driverViolations / 5) * 5, driver.racingNumber, driversTiming)}
-						th after Penalty
+						th after penalty
 					</p>
 				)}
 			</div>
