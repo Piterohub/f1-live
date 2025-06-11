@@ -1,24 +1,133 @@
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./dash/public/tag-logo.png" width="200">
-    <img alt="f1-dash" src="./dash/public/tag-logo.png" width="200">
-  </picture>
-</p>
+# f1-live
 
-<h1 align="center">Real-time Formula 1 telemetry and timing</h1>
+Fork e personalizzazioni di [f1dash](https://github.com/slowlydev/f1dash) per il progetto **livetiming.formulacritica.it**. Questa versione è dockerizzata e pronta per il deployment in produzione su EC2 con Nginx e Let's Encrypt.
 
-## f1-dash
+## Caratteristiche principali
 
-A real-time F1 dashboard that shows the leader board, tires, gaps, laps, mini sectors and much more.
+* Dashboard in tempo reale con **Server-Sent Events (SSE)**
+* API REST per dati di sessione, piloti e classifiche
+* Stack containerizzato con **Docker Compose**:
 
-## Contributing
+  * `live` (streaming SSE)
+  * `api` (endpoints REST)
+  * `frontend` (Next.js)
+  * `timescaledb` (TimescaleDB)
+  * `importer` & `analytics` (jobs di import e analisi)
+* Configurazione Nginx come reverse-proxy con SSL/TLS (Let's Encrypt)
 
-I really appreciate your interest in contributing to this project. I recommend checking out the GitHub issues marked as "Good First Issue" to get started. Also, please read [`CONTRIBUTING.md`](CONTRIBUTING.md) to learn how to contribute and set up f1-dash on your local machine for development.
+## Prerequisiti
 
-## Supporting
+* **Docker** e **Docker Compose** (plugin)
+* Un dominio configurato (es. `livetiming.formulacritica.it`)
+* **Elastic IP** su AWS EC2 o IP statico
+* **Git** per il clone della repo
 
-If you'd like to support this project and help me dedicate more time to it, you can [buy me a coffee](https://www.buymeacoffee.com/slowlydev).
+## Installazione
 
-## Notice
+1. **Clona la repo**:
 
-This project/website is unofficial and is not associated in any way with the Formula 1 companies. F1, FORMULA ONE, FORMULA 1, FIA FORMULA ONE WORLD CHAMPIONSHIP, GRAND PRIX and related marks are trade marks of Formula One Licensing B.V.
+   ```bash
+   git clone https://github.com/Piterohub/f1-live.git
+   cd f1-live
+   ```
+
+2. **Crea il file `.env`** a partire dal template:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   Imposta almeno queste variabili:
+
+   ```dotenv
+   LIVE_ADDRESS=0.0.0.0:4000
+   API_ADDRESS=0.0.0.0:4001
+   ANALYTICS_ADDRESS=0.0.0.0:4002
+   ORIGIN=https://livetiming.formulacritica.it
+   DATABASE_URL=postgres://postgres:password@timescaledb:5432/postgres
+   RUST_LOG="live=info,api=info,analytics=info"
+   ```
+
+3. **Avvia i container**:
+
+   ```bash
+   docker compose pull
+   docker compose build
+   docker compose up -d
+   ```
+
+4. **Controlla lo stato**:
+
+   ```bash
+   docker compose ps
+   ```
+
+## Configurazione Nginx
+
+Configura un virtual host per `livetiming.formulacritica.it` in `/etc/nginx/sites-available/f1dash`:
+
+```nginx
+server {
+    listen 80;
+    server_name livetiming.formulacritica.it;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name livetiming.formulacritica.it;
+
+    ssl_certificate     /etc/letsencrypt/live/livetiming.formulacritica.it/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/livetiming.formulacritica.it/privkey.pem;
+    include             /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam         /etc/letsencrypt/ssl-dhparams.pem;
+
+    location /api/sse {
+        proxy_pass         http://127.0.0.1:4000/sse;
+        proxy_http_version 1.1;
+        proxy_set_header   Host $host;
+        proxy_set_header   Upgrade $http_upgrade;
+        proxy_set_header   Connection "";
+        proxy_buffering    off;
+    }
+
+    location /api/ {
+        proxy_pass         http://127.0.0.1:4001/;
+        proxy_http_version 1.1;
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_set_header   Upgrade $http_upgrade;
+        proxy_set_header   Connection "";
+    }
+
+    location / {
+        proxy_pass         http://127.0.0.1:3000/;
+        proxy_http_version 1.1;
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_set_header   Upgrade $http_upgrade;
+        proxy_set_header   Connection "";
+    }
+}
+```
+
+Poi abilita e ricarica Nginx:
+
+```bash
+sudo ln -s /etc/nginx/sites-available/f1dash /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+## SSL/TLS
+
+Installa Certbot e richiedi il certificato:
+
+```bash
+sudo apt install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d livetiming.formulacritica.it --redirect
+```
+
+## Licenza
+
+Questo progetto è rilasciato sotto **GPL-3.0**. Vedi il file [LICENSE](LICENSE) per i dettagli.
